@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.ipynb_checkpoints/
+.ruff_cache/
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/
+
+# Data (large, download from Kaggle)
+/data/
+
+# MLflow
+
+# Local-only files
+link.txt
+docs/neuroslope/theory_answers.md
+
+# Course materials (local copy)
+docs/course/
+
+# Lightning checkpoints
+checkpoints/

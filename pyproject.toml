@@ -1,0 +1,38 @@
+[project]
+name = "kse-dl-hw3-rnn"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "ksenimod",email = "dlupashko@kse.org.ua"}
+]
+readme = "README.md"
+requires-python = ">=3.14, !=3.14.1, <3.15"
+dependencies = [
+    "numpy (==2.5.3)",
+    "pandas (==2.3.3)",
+    "pyarrow (==25.0.1)",
+    "scikit-learn (==1.9.0)",
+    "matplotlib (==3.11.1)",
+    "seaborn (==0.13.2)",
+    "torch (==2.13.0)",
+    "lightning (==2.6.5)",
+    "torchmetrics (==1.9.0)",
+    "mlflow (==3.16.1)",
+    "ipykernel (==7.3.0)",
+    "nbconvert (==7.17.1)",
+    "nbformat (==5.11.1)",
+    "iterative-stratification (==0.1.9)",
+    "pyyaml (==6.0.3)",
+    "jsonargparse[signatures] (==4.53.0)",
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+packages = [
+    {include = "core", from = "src"},
+    {include = "helpers", from = "src"},
+]
