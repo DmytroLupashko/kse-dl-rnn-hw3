@@ -1,0 +1,31 @@
+# model
+rnn_type: gru
+embed_dim: 256
+hidden_size: 512
+num_layers: 3
+bidirectional: true
+dropout_rate: 0.3
+
+# data
+train_rows: 200000
+valid_rows: 10000
+max_length_quantile: 0.99
+
+# training
+output_dir: data/processed/lecture/lstm_gru_ner/hf_checkpoints_gru_bi3
+project: rnn-lecture-ner
+run_name: gru-bidirectional-3layers
+report_to: wandb
+per_device_train_batch_size: 64
+per_device_eval_batch_size: 64
+learning_rate: 1.0e-3
+num_train_epochs: 5
+logging_steps: 50
+eval_strategy: epoch
+save_strategy: epoch
+load_best_model_at_end: true
+metric_for_best_model: f1
+greater_is_better: true
+gradient_accumulation_steps: 1
+gradient_checkpointing: false
+dataloader_pin_memory: false  # not supported on MPS

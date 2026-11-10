@@ -12,8 +12,8 @@
 
 ## Experiments
 
-- Tracking prefix `rnn`: MLflow experiments `rnn-expNN-<slug>`.
-- MLflow database and artifacts: `data/mlflow/`.
+- Tracking prefix `rnn`: wandb projects `rnn-expNN-<slug>`.
+- wandb local run files: `data/wandb/`.
 - Jupyter: `.venv/bin/jupyter`
 - New experiments: Claude only drafts card from my request.
 - Card Plan = exact text of plan shown in chat, same wording, same length.
