@@ -8,11 +8,8 @@
 TIMEOUT ?= 86400
 REMOTE := /content/hw3
 TMP := /tmp/hw3
-# Results folder per run, named after config's run_name
-RUN ?= $(shell sed -n 's/^run_name: *//p' $(CONFIG))
-DRIVE_REMOTE := /content/drive/MyDrive/Colab/Deep Learning Homework 3
-# Google Drive for Desktop mirror of DRIVE_REMOTE
-DRIVE_LOCAL ?= $(firstword $(wildcard $(HOME)/Library/CloudStorage/GoogleDrive-*))/My Drive/Colab/Deep Learning Homework 3
+# Run outputs tarball on VM
+OUT := /content/out.tgz
 
 # $(1): variable names that must be set, checked before recipe runs
 require = $(foreach v,$(1),$(if $($(v)),,$(error $(v) required, pass $(v)=... on command line)))
@@ -26,12 +23,20 @@ push = rm -f $(1).part-* && split -b 50m $(1) $(1).part- && \
 	for p in $(1).part-*; do colab upload -s $(SESSION) $$p /content/$$(basename $$p) || exit 1; done && \
 	printf '%s\n' "!cat /content/$(notdir $(1)).part-* > /content/$(notdir $(1)) && rm /content/$(notdir $(1)).part-* && mkdir -p $(REMOTE) && tar xzf /content/$(notdir $(1)) -C $(REMOTE)" | colab exec -s $(SESSION)
 
+# VM side: run outputs into $(OUT) parts, part list in $(OUT).parts. Run after `rm -f $(OUT)*`
+stage = tar czf $(OUT) data/processed data/wandb && split -b 50m $(OUT) $(OUT).part- && rm $(OUT) && ls $(OUT).part-* > $(OUT).parts
+
+# Local side: downloads staged parts, extracts into data/. Fails if nothing staged.
+# `colab exec` exits 0 even when remote command fails, so missing $(OUT).parts is failure signal
+fetch = rm -f $(TMP)/out.tgz* && mkdir -p $(TMP) && colab download -s $(SESSION) $(OUT).parts $(TMP)/out.tgz.parts && \
+	for p in $$(cat $(TMP)/out.tgz.parts); do colab download -s $(SESSION) $$p $(TMP)/$$(basename $$p) || exit 1; done && \
+	cat $(TMP)/out.tgz.part-* | tar xzf - && rm $(TMP)/out.tgz.part-*
+
 .PHONY: up down install data sync train pack
 
 up:
 	$(call require,SESSION GPU)
 	colab new -s $(SESSION) --gpu $(GPU)
-	colab drivemount -s $(SESSION)
 
 down:
 	$(call require,SESSION)
@@ -54,12 +59,14 @@ sync:
 	mkdir -p $(TMP) && tar czf $(TMP)/code.tgz --exclude=__pycache__ src scripts configs
 	$(call push,$(TMP)/code.tgz)
 
-# Needs WANDB_API_KEY in .env or environment. Outputs copied to Drive only on success
+# Needs WANDB_API_KEY in .env or environment. Outputs packed into data/ only on success
 train: sync
 	$(call require,SESSION CONFIG)
-	$(call remote,PYTHONPATH=src python scripts/train_ner.py $(CONFIG) && mkdir -p '$(DRIVE_REMOTE)/$(RUN)' && cp -r data/processed data/wandb '$(DRIVE_REMOTE)/$(RUN)/')
+	$(call remote,rm -f $(OUT)* && PYTHONPATH=src python scripts/train_ner.py $(CONFIG) && $(stage))
+	$(fetch)
 
-# Fetches run outputs from local Drive mirror into data/, no VM needed
+# Fetches VM run outputs (data/processed, data/wandb) into local data/
 pack:
-	$(call require,CONFIG)
-	rsync -a "$(DRIVE_LOCAL)/$(RUN)/" data/
+	$(call require,SESSION)
+	$(call remote,rm -f $(OUT)* && $(stage))
+	$(fetch)
