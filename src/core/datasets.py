@@ -1,6 +1,5 @@
 import ast
 import collections
-import gzip
 import re
 
 import pandas as pd
@@ -118,89 +117,7 @@ class GeoNERDataset(Dataset):
         }
 
 
-# ---- NER: CoNLL-U ----
-
-
-def read_conll_file(filepath, nrows=10):
-    sentences = []
-    current_sentence = []
-    sentence_counts = 0
-    with gzip.open(filepath, "rt", encoding="utf-8") as file:
-        for line in file:
-            line = line.strip()
-            # A blank line indicates the end of a sentence
-            if not line:
-                if current_sentence:
-                    sentences.append(current_sentence)
-                    sentence_counts += 1
-                    current_sentence = []
-            else:
-                # Split the line into its fields (e.g., token, POS, label, etc.)
-                parts = line.split()
-                current_sentence.append(parts)
-            if sentence_counts >= nrows:
-                break
-        # If the file doesn't end with a newline, add the last sentence.
-        if current_sentence:
-            sentences.append(current_sentence)
-
-    return sentences
-
-
-def get_label_distribution(sentences, label_index=9):
-    label_counter = collections.Counter()
-    for sentence in sentences:
-        for token in sentence:
-            if token[0].startswith("#") or len(token) != 10:
-                continue
-            label = token[label_index]
-            label_counter[label] += 1
-    return label_counter
-
-
-def yield_tokens(data):
-    for sentence in data:
-        tokens = [row[1] for row in sentence if not row[0].startswith("#")]
-        yield tokens
-
-
-# Define a tokenizer that extracts tokens from a given sentence (ignoring metadata rows)
-def simple_tokenizer(sentence):
-    return [row[1] for row in sentence if not row[0].startswith("#")]
-
-
-class TextDataset(torch.utils.data.Dataset):
-    def __init__(self, conll_data, tokenizer, label_names, max_length):
-        self.conll_data = conll_data
-        self.tokenizer = tokenizer
-        self.pad_token_id = tokenizer.pad_token_id
-        self.max_length = int(max_length)
-        self.label_names = label_names
-        self.label2id = {k: ind for ind, k in enumerate(list(self.label_names))}
-        self.id2label = {v: k for k, v in self.label2id.items()}
-
-    def simple_tokenizer(self, sentence):
-        return [row[1] for row in sentence if not row[0].startswith("#")]
-
-    def get_labels(self, sentence):
-        return [
-            self.label2id[row[-1]] for row in sentence if not row[0].startswith("#")
-        ]
-
-    def __getitem__(self, idx):
-        current_item = self.conll_data[idx]
-        input_ids = self.tokenizer.convert_tokens_to_ids(
-            self.simple_tokenizer(current_item)
-        )
-        labels = self.get_labels(current_item)
-
-        return {
-            "input_ids": input_ids[: self.max_length],
-            "labels": labels[: self.max_length],
-        }
-
-    def __len__(self):
-        return len(self.conll_data)
+# ---- Collator ----
 
 
 class DataCollatorForTokenClassification:
