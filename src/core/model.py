@@ -60,10 +60,8 @@ class UniversalRNNTokenClassifier(RNNPreTrainedModel):
     def forward(
         self,
         input_ids: torch.LongTensor = None,
-        labels: Optional[torch.LongTensor] = None,
-        attention_mask: Optional[
-            torch.LongTensor
-        ] = None,  # not used by RNN; masking is via labels=-100
+        labels: torch.LongTensor | None = None,
+        attention_mask: torch.LongTensor | None = None,  # not used by RNN; masking is via labels=-100
         **kwargs,
     ):
         # input_ids: [B, T]

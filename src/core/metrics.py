@@ -2,8 +2,9 @@ import evaluate
 import numpy as np
 
 
-def make_compute_metrics(id2label):
-    """Returns compute_metrics for token classification: seqeval over non -100 tokens."""
+def make_compute_metrics(id2label, entity=None):
+    """Returns compute_metrics for token classification: seqeval over non -100 tokens.
+    entity (e.g. "LOC"): precision/recall/f1 of that type only; accuracy stays over all tags."""
     metric = evaluate.load("seqeval")
 
     def compute_metrics_fn(eval_pred):
@@ -22,10 +23,15 @@ def make_compute_metrics(id2label):
             true_preds.append(row)
 
         results = metric.compute(predictions=true_preds, references=true_labels)
+        scores = (
+            results.get(entity, {"precision": 0.0, "recall": 0.0, "f1": 0.0})
+            if entity
+            else {k: results[f"overall_{k}"] for k in ("precision", "recall", "f1")}
+        )
         return {
-            "precision": results["overall_precision"],
-            "recall": results["overall_recall"],
-            "f1": results["overall_f1"],
+            "precision": scores["precision"],
+            "recall": scores["recall"],
+            "f1": scores["f1"],
             "accuracy": results["overall_accuracy"],
         }
 
