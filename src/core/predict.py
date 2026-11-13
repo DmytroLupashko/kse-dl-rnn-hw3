@@ -33,5 +33,4 @@ def infer(model, text, tokenizer, split=word_tokenize):
         pred_ids = logits.argmax(dim=-1).squeeze(0).tolist()
 
     bio_tags = [model.config.id2label[p] for p in pred_ids]
-    # task scores locations only: ORG/PER entities are dropped
-    return [e for e in merge_bio_entities(tok, bio_tags) if e["label"] == "LOC"]
+    return merge_bio_entities(tok, bio_tags)
