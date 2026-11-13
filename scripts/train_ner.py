@@ -84,7 +84,7 @@ def main():
     trainer.save_metrics("eval", metrics)
     print("Eval:", metrics)
 
-    print("Submission:", write_submission(model, tokenizer, training_args.run_name))
+    print("Submission:", write_submission([(model, tokenizer)], training_args.run_name))
 
     if "wandb" in training_args.report_to:
         import wandb

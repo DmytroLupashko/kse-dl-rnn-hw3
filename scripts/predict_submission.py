@@ -15,7 +15,7 @@ def main():
     loc_threshold = float(sys.argv[3]) if len(sys.argv) > 3 else LOC_THRESHOLD
     model = UniversalRNNTokenClassifier.from_pretrained(run_dir)
     tokenizer = PreTrainedTokenizerFast.from_pretrained(run_dir)
-    print("Submission:", write_submission(model, tokenizer, name, loc_threshold))
+    print("Submission:", write_submission([(model, tokenizer)], name, loc_threshold))
 
 
 if __name__ == "__main__":

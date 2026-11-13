@@ -7,11 +7,15 @@ LOC_THRESHOLD = 0.5
 
 
 def tag_ids(logits, label2id, loc_threshold=LOC_THRESHOLD):
-    """Tag ids from logits [..., C]: LOC when P(B-LOC) + P(I-LOC) >= loc_threshold
+    """Tag ids from logits [..., C], via probs_tag_ids on their softmax."""
+    probs = torch.as_tensor(logits, dtype=torch.float).softmax(dim=-1)
+    return probs_tag_ids(probs, label2id, loc_threshold)
+
+
+def probs_tag_ids(probs, label2id, loc_threshold=LOC_THRESHOLD):
+    """Tag ids from tag probs [..., C]: LOC when P(B-LOC) + P(I-LOC) >= loc_threshold
     (B or I, whichever more likely), otherwise most likely non-LOC tag."""
-    logits = torch.as_tensor(logits, dtype=torch.float)
     b, i = label2id["B-LOC"], label2id["I-LOC"]
-    probs = logits.softmax(dim=-1)
     is_loc = probs[..., b] + probs[..., i] >= loc_threshold
     loc_tag = torch.where(probs[..., b] >= probs[..., i], b, i)
     other = probs.clone()
@@ -19,17 +23,24 @@ def tag_ids(logits, label2id, loc_threshold=LOC_THRESHOLD):
     return torch.where(is_loc, loc_tag, other.argmax(dim=-1))
 
 
-def word_tags(model, tokenizer, words, loc_threshold=LOC_THRESHOLD):
-    """BIO tag per word, from first subword of each word.
+def word_probs(model, tokenizer, words):
+    """Tag probs [W, C] per word, from first subword of each word.
     One text per forward pass: no right padding, which bidirectional RNN would read."""
     enc = tokenizer(words, is_split_into_words=True, add_special_tokens=False)
     device = next(model.parameters()).device
     inp = torch.tensor([enc["input_ids"]], dtype=torch.long, device=device)  # [1, T]
     with torch.no_grad():
         logits = model(input_ids=inp).logits.squeeze(0).cpu()
-    pred_ids = tag_ids(logits, model.config.label2id, loc_threshold).tolist()
     keep = first_subword_labels(enc.word_ids(), [0] * len(words))
-    return [model.config.id2label[p] for p, k in zip(pred_ids, keep) if k != -100]
+    return logits.softmax(dim=-1)[torch.tensor(keep) != -100]
+
+
+def word_tags(members, words, loc_threshold=LOC_THRESHOLD):
+    """BIO tag per word from tag probs averaged over members: (model, tokenizer) pairs, same labels."""
+    probs = torch.stack([word_probs(m, t, words) for m, t in members]).mean(dim=0)
+    config = members[0][0].config
+    pred_ids = probs_tag_ids(probs, config.label2id, loc_threshold).tolist()
+    return [config.id2label[p] for p in pred_ids]
 
 
 def merge_spans(tags, spans, entity="LOC"):
@@ -45,12 +56,13 @@ def merge_spans(tags, spans, entity="LOC"):
     return [(l, r) for l, r, _ in out]
 
 
-def predict_locations(model, tokenizer, texts, loc_threshold=LOC_THRESHOLD):
-    """Location strings per text, cut from text by predicted char spans."""
-    model.eval()
+def predict_locations(members, texts, loc_threshold=LOC_THRESHOLD):
+    """Location strings per text, cut from text by char spans predicted by members (see word_tags)."""
+    for model, _ in members:
+        model.eval()
     result = []
     for text in texts:
         words, spans = split_words(text)
-        tags = word_tags(model, tokenizer, words, loc_threshold) if words else []
+        tags = word_tags(members, words, loc_threshold) if words else []
         result.append([text[l:r] for l, r in merge_spans(tags, spans)])
     return result
