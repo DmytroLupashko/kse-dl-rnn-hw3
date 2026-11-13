@@ -14,6 +14,9 @@ Configs: `configs/cv_lb_check/`. Loss: cross-entropy on uk_geo valid, best epoch
 | `bigru_uk` | 0.0712 | 0.8523 | 0.5090 |
 | `bigru_bpe` | 0.0454 | 0.8771 | 0.5225 |
 | `bigru_bpe`, LOC threshold 0.5 | 0.0454 | 0.8778 | 0.5343 |
+| `bigru_bpe_4k`, LOC threshold 0.5 | 0.0433 | 0.8843 | 0.5518 |
+
+`bigru_bpe_4k`: `bigru_bpe` with BPE vocab size 4k instead of 30k, config `configs/bpe_vocab/` on branch `bpe-vocab`. BPE vocab size 4k optimal.
 
 ## Chosen hyperparameters
 
