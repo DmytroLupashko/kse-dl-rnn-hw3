@@ -3,7 +3,6 @@ Usage: python scripts/train_ner.py <config.yaml>"""
 
 import sys
 
-import pandas as pd
 from transformers import Trainer
 
 from core.args import DataArguments, ModelArguments
@@ -20,15 +19,13 @@ from core.model import (
     UniversalRNNTokenClassifier,
     load_vec_embeddings,
 )
-from core.predict import predict_locations
 from helpers.config import (
     FASTTEXT_PATH,
     RU_GEO_PATH,
-    SUBMISSIONS_DIR,
-    TEST_PATH,
     UK_GEO_PATH,
     parse_config,
 )
+from helpers.submission import write_submission
 from helpers.tracking import setup_wandb
 
 
@@ -87,14 +84,7 @@ def main():
     trainer.save_metrics("eval", metrics)
     print("Eval:", metrics)
 
-    test = pd.read_csv(TEST_PATH)
-    test["locations"] = [
-        str(locs) for locs in predict_locations(model, tokenizer, test["text"])
-    ]
-    SUBMISSIONS_DIR.mkdir(parents=True, exist_ok=True)
-    out = SUBMISSIONS_DIR / f"{training_args.run_name}.csv"
-    test[["text_id", "locations"]].to_csv(out, index=False)
-    print("Submission:", out)
+    print("Submission:", write_submission(model, tokenizer, training_args.run_name))
 
     if "wandb" in training_args.report_to:
         import wandb
