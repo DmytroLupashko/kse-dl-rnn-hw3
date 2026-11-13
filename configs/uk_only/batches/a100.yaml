@@ -1,0 +1,6 @@
+# make batch BATCH=configs/uk_only/batches/a100.yaml
+session: uk-only
+gpu: A100
+configs:
+  - configs/uk_only/bigru_bpe_uk.yaml
+  - configs/uk_only/bigru_fasttext_uk.yaml

@@ -2,7 +2,7 @@ import torch
 
 from core.datasets import first_subword_labels, split_words
 
-# Best mean LOC F1 over 5 models on uk_geo valid (scripts/tune_loc_threshold.py); beat argmax on LB
+# Best mean LOC F1 over 5 models on uk_geo valid; beat argmax on LB
 LOC_THRESHOLD = 0.5
 
 
