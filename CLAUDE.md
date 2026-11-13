@@ -12,7 +12,7 @@
 
 ## Experiments
 
-- Tracking prefix `rnn`: MLflow experiments `rnn-expNN-<slug>`.
+- Tracking prefix `rnn`: MLflow experiments `rnn-<slug>`.
 - MLflow database and artifacts: `data/mlflow/`.
 - Jupyter: `.venv/bin/jupyter`
 - New experiments: Claude only drafts card from my request.

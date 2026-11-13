@@ -1,3 +1,4 @@
+import gzip
 from typing import Optional
 
 import torch
@@ -81,6 +82,25 @@ class UniversalRNNTokenClassifier(RNNPreTrainedModel):
 
         # Return the standard HF TokenClassifierOutput so Trainer can read loss/logits.
         return TokenClassifierOutput(loss=loss, logits=logits)
+
+
+def load_vec_embeddings(embedding, path, vocab):
+    """Copies .vec(.gz) vectors (fastText text format) into embedding rows of vocab words;
+    other rows keep their init. Returns number of rows filled."""
+    opener = gzip.open if str(path).endswith(".gz") else open
+    hits = 0
+    with opener(path, "rt", encoding="utf-8") as f:
+        _, dim = map(int, f.readline().split())
+        if dim != embedding.embedding_dim:
+            raise ValueError(f"vectors dim {dim}, embed_dim {embedding.embedding_dim}")
+        with torch.no_grad():
+            for line in f:
+                word, rest = line.rstrip().split(" ", 1)
+                idx = vocab.get(word)
+                if idx is not None and idx != embedding.padding_idx:
+                    embedding.weight[idx] = torch.tensor([float(x) for x in rest.split()])
+                    hits += 1
+    return hits
 
 
 def count_params(model):
