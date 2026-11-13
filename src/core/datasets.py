@@ -4,14 +4,32 @@ import re
 
 import pandas as pd
 import torch
-from tokenizers import Tokenizer, models, pre_tokenizers
+from tokenizers import Tokenizer, models, pre_tokenizers, trainers
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizerFast
 
 PAD_TOKEN, UNK_TOKEN = "<pad>", "<unk>"
 
+# Word: letters/digits joined by hyphen or apostrophe; any other non-space char is own word.
+# Punctuation split off, so "Києві," and "Києві" share one id and entity spans exclude it.
+WORD_RE = re.compile(r"\w+(?:[-'’ʼ]\w+)*|[^\w\s]")
+
+
+def split_words(text):
+    """Words of text and their char spans [l, r)."""
+    matches = list(WORD_RE.finditer(text))
+    return [m.group() for m in matches], [m.span() for m in matches]
+
 
 # ---- Tokenizers ----
+
+
+def _fast(tokenizer):
+    # Words come pre-split (is_split_into_words), WhitespaceSplit keeps each word whole
+    tokenizer.pre_tokenizer = pre_tokenizers.WhitespaceSplit()
+    return PreTrainedTokenizerFast(
+        tokenizer_object=tokenizer, unk_token=UNK_TOKEN, pad_token=PAD_TOKEN
+    )
 
 
 def build_word_tokenizer(token_lists, specials=(PAD_TOKEN, UNK_TOKEN), max_size=None):
@@ -23,12 +41,25 @@ def build_word_tokenizer(token_lists, specials=(PAD_TOKEN, UNK_TOKEN), max_size=
     n_words = max_size - len(specials) if max_size else None
     words = [w for w, _ in counts.most_common(n_words)]
     vocab = {tok: i for i, tok in enumerate([*specials, *words])}
+    return _fast(Tokenizer(models.WordLevel(vocab, unk_token=UNK_TOKEN)))
 
-    tokenizer = Tokenizer(models.WordLevel(vocab, unk_token=UNK_TOKEN))
+
+def build_bpe_tokenizer(token_lists, vocab_size, specials=(PAD_TOKEN, UNK_TOKEN)):
+    """BPE trained on words; merges never cross word boundary, so each word maps to its subwords."""
+    tokenizer = Tokenizer(models.BPE(unk_token=UNK_TOKEN))
     tokenizer.pre_tokenizer = pre_tokenizers.WhitespaceSplit()
-    return PreTrainedTokenizerFast(
-        tokenizer_object=tokenizer, unk_token=UNK_TOKEN, pad_token=PAD_TOKEN
-    )
+    trainer = trainers.BpeTrainer(vocab_size=vocab_size, special_tokens=list(specials))
+    tokenizer.train_from_iterator((" ".join(toks) for toks in token_lists), trainer)
+    return _fast(tokenizer)
+
+
+def build_tokenizer(kind, token_lists, vocab_size):
+    """kind: "word" (WordLevel) or "bpe"."""
+    if kind == "word":
+        return build_word_tokenizer(token_lists, max_size=vocab_size)
+    if kind == "bpe":
+        return build_bpe_tokenizer(token_lists, vocab_size)
+    raise ValueError(f"unknown tokenizer {kind!r}")
 
 
 # ---- NER: geo CSV (uk_geo, ru_geo) ----
@@ -71,9 +102,12 @@ def load_ru_geo(path, nrows=None, n_docs=None, seed=0):
     return _parse_markers(df)
 
 
-def load_geo(uk_path, ru_path, ru_docs, seed=0):
-    """uk_geo plus ru_docs sampled ru_geo documents; validation stays uk only."""
-    frames = [load_uk_geo(uk_path), load_ru_geo(ru_path, n_docs=ru_docs, seed=seed)]
+def load_geo(uk_path, ru_path, train_rows=None, ru_docs=0, ru_nrows=None, seed=0):
+    """First train_rows uk_geo train rows plus ru_docs documents sampled from first ru_nrows
+    ru_geo rows (ru_docs 0: no ru); validation stays uk only."""
+    frames = [load_uk_geo(uk_path, train_rows=train_rows)]
+    if ru_docs:
+        frames.append(load_ru_geo(ru_path, nrows=ru_nrows, n_docs=ru_docs, seed=seed))
     return pd.concat(frames, ignore_index=True)
 
 
@@ -83,38 +117,54 @@ def row_spans(row):
 
 
 def bio_tags(text, spans):
-    """Whitespace words (same as str.split) and their BIO tags from (l, r, type) spans, [l, r)."""
+    """Words (split_words) and their BIO tags from (l, r, type) spans, [l, r)."""
     words, tags = [], []
-    for m in re.finditer(r"\S+", text):
-        s, e = m.span()
+    for word, (s, e) in zip(*split_words(text)):
         hit = next(((l, r, t) for l, r, t in spans if s < r and e > l), None)
-        words.append(m.group())
+        words.append(word)
         tags.append("O" if hit is None else f"{'B' if s <= hit[0] else 'I'}-{hit[2]}")
     return words, tags
 
 
-class GeoNERDataset(Dataset):
-    """One split of geo frame; LOC/ORG/PER tags. Output matches DataCollatorForTokenClassification."""
+def tag_frame(df):
+    """(words, tags) per row of geo frame; rows without words dropped."""
+    pairs = (bio_tags(row["text"], row_spans(row)) for row in df.to_dict("records"))
+    return [(w, t) for w, t in pairs if w]
 
-    def __init__(self, df, tokenizer, max_length):
-        self.df = df.reset_index(drop=True)
-        self.tokenizer = tokenizer
-        self.max_length = int(max_length)
+
+def first_subword_labels(word_ids, word_labels, ignore=-100):
+    """Label on first subword of each word, ignore on rest: loss and metric see one label per word."""
+    labels, prev = [], None
+    for wid in word_ids:
+        labels.append(ignore if wid is None or wid == prev else word_labels[wid])
+        prev = wid
+    return labels
+
+
+class GeoNERDataset(Dataset):
+    """(words, tags) pairs encoded once; output matches DataCollatorForTokenClassification."""
+
+    def __init__(self, tagged, tokenizer, max_length):
         self.label2id = {k: i for i, k in enumerate(NER_LABELS)}
         self.id2label = dict(enumerate(NER_LABELS))
+        enc = tokenizer(
+            [words for words, _ in tagged],
+            is_split_into_words=True,
+            add_special_tokens=False,
+            truncation=True,
+            max_length=int(max_length),
+        )
+        self.input_ids = enc["input_ids"]
+        self.labels = [
+            first_subword_labels(enc.word_ids(i), [self.label2id[t] for t in tags])
+            for i, (_, tags) in enumerate(tagged)
+        ]
 
     def __len__(self):
-        return len(self.df)
+        return len(self.input_ids)
 
     def __getitem__(self, idx):
-        row = self.df.iloc[idx]
-        words, tags = bio_tags(row["text"], row_spans(row))
-        input_ids = self.tokenizer.convert_tokens_to_ids(words)
-        labels = [self.label2id[t] for t in tags]
-        return {
-            "input_ids": input_ids[: self.max_length],
-            "labels": labels[: self.max_length],
-        }
+        return {"input_ids": self.input_ids[idx], "labels": self.labels[idx]}
 
 
 # ---- Collator ----

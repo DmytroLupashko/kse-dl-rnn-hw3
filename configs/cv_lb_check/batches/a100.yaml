@@ -1,0 +1,6 @@
+# make batch BATCH=configs/cv_lb_check/batches/a100.yaml
+session: a100
+gpu: A100
+configs:
+  - configs/cv_lb_check/bigru_bpe.yaml
+  - configs/cv_lb_check/bigru_fasttext.yaml
