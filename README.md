@@ -8,15 +8,18 @@ Configs: `configs/cv_lb_check/`. Loss: cross-entropy on uk_geo valid, best epoch
 
 | Model | Loss | Local validation | Kaggle score |
 |---|---|---|---|
-| `gru_uni` | 0.0818 | 0.8110 | 0.4602 |
-| `bigru_uk_ru` | 0.0803 | 0.8322 | 0.4955 |
-| `bigru_fasttext` | 0.0754 | 0.8446 | 0.5044 |
-| `bigru_uk` | 0.0712 | 0.8523 | 0.5090 |
-| `bigru_bpe` | 0.0454 | 0.8771 | 0.5225 |
-| `bigru_bpe`, LOC threshold 0.5 | 0.0454 | 0.8778 | 0.5343 |
-| `bigru_bpe_4k`, LOC threshold 0.5 | 0.0433 | 0.8843 | 0.5518 |
+| `gru_uni`, argmax | 0.0818 | 0.8110 | 0.4602 |
+| `bigru_uk_ru`, argmax | 0.0803 | 0.8322 | 0.4955 |
+| `bigru_fasttext`, argmax | 0.0754 | 0.8446 | 0.5044 |
+| `bigru_uk`, argmax | 0.0712 | 0.8523 | 0.5090 |
+| `bigru_bpe`, argmax | 0.0454 | 0.8771 | 0.5225 |
+| `bigru_bpe` | 0.0454 | 0.8778 | 0.5343 |
+| `bigru_bpe_4k` | 0.0433 | 0.8843 | 0.5518 |
+| Average | | 0.8867 | 0.5658 |
 
 `bigru_bpe_4k`: `bigru_bpe` with BPE vocab size 4k instead of 30k, config `configs/bpe_vocab/` on branch `bpe-vocab`. BPE vocab size 4k optimal.
+
+Average: tag probs of `bigru_bpe_4k` and `bigru_fasttext` averaged per word, `scripts/ensemble.py` on branch `ensemble`. Its local validation scored one text per forward pass, without truncation and padding, so not directly comparable with rows above. Averaging has effect.
 
 ## Chosen hyperparameters
 
