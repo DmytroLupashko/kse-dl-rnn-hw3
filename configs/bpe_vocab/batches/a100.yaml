@@ -1,0 +1,9 @@
+# make batch BATCH=configs/bpe_vocab/batches/a100.yaml
+session: bpe-vocab
+gpu: A100
+configs:
+  - configs/bpe_vocab/bigru_bpe_4k.yaml
+  - configs/bpe_vocab/bigru_bpe_8k.yaml
+  - configs/bpe_vocab/bigru_bpe_16k.yaml
+  - configs/bpe_vocab/bigru_bpe_30k.yaml
+  - configs/bpe_vocab/bigru_bpe_50k.yaml
