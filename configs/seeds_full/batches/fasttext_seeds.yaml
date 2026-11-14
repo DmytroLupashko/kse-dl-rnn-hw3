@@ -1,0 +1,9 @@
+# make batch BATCH=configs/seeds_full/batches/fasttext_seeds.yaml
+session: seeds-fasttext
+gpu: A100
+configs:
+  - configs/seeds_full/bigru_fasttext_s1.yaml
+  - configs/seeds_full/bigru_fasttext_s2.yaml
+  - configs/seeds_full/bigru_fasttext_s3.yaml
+  - configs/seeds_full/bigru_fasttext_s4.yaml
+  - configs/seeds_full/bigru_fasttext_s5.yaml

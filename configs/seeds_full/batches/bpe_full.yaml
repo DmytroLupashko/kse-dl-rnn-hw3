@@ -1,0 +1,5 @@
+# make batch BATCH=configs/seeds_full/batches/bpe_full.yaml
+session: full-bpe
+gpu: A100
+configs:
+  - configs/seeds_full/bigru_bpe_4k_full.yaml

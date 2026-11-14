@@ -35,9 +35,12 @@ def word_probs(model, tokenizer, words):
     return logits.softmax(dim=-1)[torch.tensor(keep) != -100]
 
 
-def word_tags(members, words, loc_threshold=LOC_THRESHOLD):
-    """BIO tag per word from tag probs averaged over members: (model, tokenizer) pairs, same labels."""
-    probs = torch.stack([word_probs(m, t, words) for m, t in members]).mean(dim=0)
+def word_tags(members, words, loc_threshold=LOC_THRESHOLD, weights=None):
+    """BIO tag per word from tag probs averaged over members: (model, tokenizer) pairs, same labels.
+    weights: one per member, summing to 1; None: equal."""
+    probs = torch.stack([word_probs(m, t, words) for m, t in members])
+    w = torch.full((len(members),), 1 / len(members)) if weights is None else torch.tensor(weights)
+    probs = (probs * w[:, None, None]).sum(dim=0)
     config = members[0][0].config
     pred_ids = probs_tag_ids(probs, config.label2id, loc_threshold).tolist()
     return [config.id2label[p] for p in pred_ids]
@@ -56,13 +59,13 @@ def merge_spans(tags, spans, entity="LOC"):
     return [(l, r) for l, r, _ in out]
 
 
-def predict_locations(members, texts, loc_threshold=LOC_THRESHOLD):
+def predict_locations(members, texts, loc_threshold=LOC_THRESHOLD, weights=None):
     """Location strings per text, cut from text by char spans predicted by members (see word_tags)."""
     for model, _ in members:
         model.eval()
     result = []
     for text in texts:
         words, spans = split_words(text)
-        tags = word_tags(members, words, loc_threshold) if words else []
+        tags = word_tags(members, words, loc_threshold, weights) if words else []
         result.append([text[l:r] for l, r in merge_spans(tags, spans)])
     return result

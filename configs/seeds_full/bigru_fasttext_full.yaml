@@ -1,0 +1,33 @@
+# bigru_fasttext on full uk_geo, ru kept 1:1
+name: bigru_fasttext_full
+experiment: seeds_full
+
+model:
+  rnn_type: gru
+  embed_dim: 300
+  hidden_size: 512
+  num_layers: 3
+  bidirectional: true
+  dropout_rate: 0.3
+  fasttext: true
+
+data:
+  train_rows: 1000000
+  ru_docs: 90000
+  ru_nrows: 2000000
+  tokenizer: word
+
+trainer:
+  report_to: wandb
+  per_device_train_batch_size: 64
+  per_device_eval_batch_size: 64
+  learning_rate: 1.0e-4
+  num_train_epochs: 5
+  logging_steps: 50
+  eval_strategy: epoch
+  save_strategy: epoch
+  save_total_limit: 1
+  load_best_model_at_end: true
+  metric_for_best_model: f1
+  greater_is_better: true
+  dataloader_pin_memory: true

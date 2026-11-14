@@ -1,7 +1,11 @@
-"""Average tag probs of saved runs: python scripts/ensemble.py <name> <run_dir> <run_dir> ...
-Prints LOC F1 on uk_geo valid per run and for average; writes data/submissions/<name>.csv from average."""
+"""Average tag probs of saved runs: python scripts/ensemble.py <name> <group> <group> ...
+Group: comma-separated run dirs. Ensemble = mean over groups of mean within group.
+Prints LOC F1 on uk_geo valid per run, per group and for ensemble;
+writes data/submissions/<name>.csv from ensemble.
+Valid probs cached per run in <run_dir>/valid_word_probs.pt, refreshed when model is newer."""
 
 import sys
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -22,6 +26,23 @@ def load_run(run_dir):
     return model, PreTrainedTokenizerFast.from_pretrained(run_dir)
 
 
+def valid_probs(run_dir, member, valid):
+    """Word probs per valid text, from cache when newer than model weights."""
+    cache = Path(run_dir) / "valid_word_probs.pt"
+    weights = Path(run_dir) / "model.safetensors"
+    if cache.exists() and cache.stat().st_mtime > weights.stat().st_mtime:
+        return torch.load(cache)
+    model, tokenizer = member
+    probs = [word_probs(model, tokenizer, words) for words, _ in tqdm(valid, desc=run_dir)]
+    torch.save(probs, cache)
+    return probs
+
+
+def weighted(runs, weights):
+    """Per text, weighted sum of runs' word probs."""
+    return [sum(w * p for w, p in zip(weights, ps)) for ps in zip(*runs)]
+
+
 def loc_f1(probs, valid, config):
     """LOC F1 of thresholded tags from word probs per text vs valid tags."""
     preds = [probs_tag_ids(p, config.label2id).numpy() for p in probs]
@@ -30,21 +51,24 @@ def loc_f1(probs, valid, config):
 
 
 def main():
-    name, run_dirs = sys.argv[1], sys.argv[2:]
+    name, groups = sys.argv[1], [g.split(",") for g in sys.argv[2:]]
+    run_dirs = [d for g in groups for d in g]
+    weights = [1 / (len(groups) * len(g)) for g in groups for _ in g]
     members = [load_run(d) for d in run_dirs]
     config = members[0][0].config
     valid = tag_frame(load_uk_geo(UK_GEO_PATH, train_rows=0))
 
-    runs = [
-        [word_probs(m, t, words) for words, _ in tqdm(valid, desc=d)]
-        for d, (m, t) in zip(run_dirs, members)
-    ]
-    for run_dir, probs in zip(run_dirs, runs):
-        print(f"{run_dir}: LOC F1 {loc_f1(probs, valid, config):.4f}")
-    mean = [torch.stack(ps).mean(dim=0) for ps in zip(*runs)]
-    print(f"average: LOC F1 {loc_f1(mean, valid, config):.4f}")
+    runs = dict(zip(run_dirs, (valid_probs(d, m, valid) for d, m in zip(run_dirs, members))))
+    for d in run_dirs:
+        print(f"{d}: LOC F1 {loc_f1(runs[d], valid, config):.4f}")
+    for i, g in enumerate(groups):
+        if len(g) > 1:
+            group = weighted([runs[d] for d in g], [1 / len(g)] * len(g))
+            print(f"group {i + 1} average: LOC F1 {loc_f1(group, valid, config):.4f}")
+    ensemble = weighted([runs[d] for d in run_dirs], weights)
+    print(f"ensemble: LOC F1 {loc_f1(ensemble, valid, config):.4f}")
 
-    print("Submission:", write_submission(members, name))
+    print("Submission:", write_submission(members, name, weights=weights))
 
 
 if __name__ == "__main__":

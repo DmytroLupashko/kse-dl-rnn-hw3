@@ -3,7 +3,7 @@ Usage: python scripts/train_ner.py <config.yaml>"""
 
 import sys
 
-from transformers import Trainer
+from transformers import Trainer, set_seed
 
 from core.args import DataArguments, ModelArguments
 from core.datasets import (
@@ -33,6 +33,8 @@ def main():
     model_args, data_args, training_args = parse_config(
         sys.argv[1], ModelArguments, DataArguments
     )
+    # Trainer seeds only after model exists: seed here so trainer.seed also fixes weight init
+    set_seed(training_args.seed)
     if "wandb" in training_args.report_to:
         setup_wandb(training_args.project)
 
